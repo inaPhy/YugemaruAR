@@ -7,13 +7,13 @@ import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   window.releaseInitialCamera?.();$('qr-prompt').hidden=true;error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
 function update(){
-  if(error)return;
+  if(error || resetting)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
     if(placement.tracking)message('QR TRACKING','弓削丸が現れました',normal?'ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
@@ -28,9 +28,22 @@ function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>location.reload();
+function resetPlacement(){
+  if(!modelReady || resetting)return;
+  resetting=true;resetGestures();placement.reset();normal=false;
+  size=1;angle=DEFAULT_MODEL_YAW;
+  anchor.visible=false;anchor.position.set(0,0,0);anchor.quaternion.identity();anchor.scale.setScalar(1);
+  visual.position.set(0,0,0);visual.rotation.set(0,DEFAULT_MODEL_YAW,0);visual.scale.setScalar(1);
+  $('qr-prompt').hidden=true;
+  document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);
+  message('RESET','置き直しています','QRコードを映してください。');
+  // Rebase the tracking camera, without restarting the camera or loading assets.
+  // Ignore image events until the next engine frame has finished updating.
+  xr.XrController.recenter();
+}
+$('reset').onclick=resetPlacement;
 function receive({detail}){
-  if(!modelReady || error)return;
+  if(!modelReady || error || resetting)return;
   const pose=placement.observe(detail);
   if(!pose)return;
   const {camera}=xr.Threejs.xrScene();
@@ -67,7 +80,7 @@ function pipeline(model){return {
     running=true;modelReady=true;update();
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
-  onUpdate:({processCpuResult})=>{updateQrPrompt();const reality=processCpuResult?.reality;if(reality){const next=reality.trackingStatus==='NORMAL';if(normal!==next){normal=next;update();}}},
+  onUpdate:({processCpuResult})=>{if(resetting){resetting=false;update();return;}updateQrPrompt();const reality=processCpuResult?.reality;if(reality){const next=reality.trackingStatus==='NORMAL';if(normal!==next){normal=next;update();}}},
   onException:(e)=>{console.error('AR engine error',e);fail('ARを開始・継続できませんでした','この端末のブラウザでカメラとモーションの使用を許可して再読み込みしてください。');},
   listeners:[
     {event:'reality.imagefound',process:receive},
