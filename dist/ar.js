@@ -7,7 +7,7 @@ import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetOnNextMarker=false;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
@@ -29,11 +29,12 @@ function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>{resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
+$('reset').onclick=()=>{resetOnNextMarker=true;resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
 function receive({detail}){
   if(!modelReady || error)return;
   const pose=placement.observe(detail);
   if(!pose)return;
+  if(resetOnNextMarker){resetGestures();size=1;angle=DEFAULT_MODEL_YAW;controls();resetOnNextMarker=false;}
   const {camera}=xr.Threejs.xrScene();
   anchor.position.copy(beyondMarker(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3())));anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
