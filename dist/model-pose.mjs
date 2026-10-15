@@ -1,1 +1,10 @@
 export const DEFAULT_MODEL_YAW=Math.PI/2;
+// Offset horizontally away from the camera, preserving the QR's height.
+export function beyondQr(marker,camera,qrWidth,forward={x:0,z:-1}){
+  let x=marker.x-camera.x,z=marker.z-camera.z;
+  let length=Math.hypot(x,z);
+  if(length<.01){x=forward.x;z=forward.z;length=Math.hypot(x,z);}
+  if(length<.01){x=0;z=-1;length=1;}
+  const distance=qrWidth*5;
+  return {x:marker.x+x/length*distance,y:marker.y,z:marker.z+z/length*distance};
+}
