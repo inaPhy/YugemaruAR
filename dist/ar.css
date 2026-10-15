@@ -24,7 +24,8 @@ header{flex-shrink:0}
   :root,body{background:white!important;color:#173e37;overflow:visible}
   body>*{display:none!important}
   #print-sheet{display:block!important;text-align:center;break-inside:avoid}
-  #print-sheet h1{font-size:22pt;margin:0 0 10mm}
-  #print-sheet img{display:block;width:170mm;max-width:100%;height:auto;margin:auto;image-rendering:pixelated}
-  #print-sheet p{font-size:12pt;margin:8mm 0}
+  #print-sheet h1{font-size:26pt;line-height:1.35;margin:0 0 7mm;font-weight:800}
+  #print-sheet img{display:block;width:150mm;max-width:100%;height:auto;margin:0 auto 8mm;image-rendering:pixelated}
+  #print-sheet ol{display:inline-block;margin:0;padding:0;list-style-position:inside;text-align:left;font-size:14pt;line-height:1.9;font-weight:600}
+  #print-sheet li{white-space:nowrap}
 }
