@@ -4,38 +4,24 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Placement} from '../dist/placement.mjs';
 import {DEFAULT_MODEL_YAW,beyondMarker} from '../dist/model-pose.mjs';
-test('reset restores initial transform on next QR and ordinary reacquisition preserves adjustments',()=>{
- const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',classList:{add(){}},setAttribute(){}});return nodes.get(id);};
+test('reset reloads the AR session; a fresh session has no placement or adjusted transform',()=>{
  const source=readFileSync(new URL('../dist/ar.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').split('function pipeline(model)')[0];
- const context=vm.createContext({window:{},document:{getElementById:get,querySelectorAll:()=>[]},THREE:{Vector3:class{}},Placement,DEFAULT_MODEL_YAW,beyondMarker,bindModelGestures:()=>()=>{},location:{}});
- vm.runInContext(source+`\nvisual={scale:{setScalar(v){this.value=v}},rotation:{}};anchor={position:{copy(v){this.value={...v}}},quaternion:{copy(v){this.value={...v}}},scale:{setScalar(){}},visible:true};xr={Threejs:{xrScene:()=>({camera:{getWorldPosition:()=>({x:0,y:0,z:2}),getWorldDirection:()=>({x:0,y:0,z:-1})}})}};modelReady=true;`,context);
- const marker={detail:{name:'yugemaru-qr',position:{x:0,y:0,z:0},rotation:{x:0,y:0,z:0,w:1},scale:1}};
- context.marker=marker;
- vm.runInContext('size=2;angle=3;receive(marker);',context);
- assert.equal(vm.runInContext('size',context),2);
- get('reset').onclick();
- assert.equal(vm.runInContext('waitingForMarkerLoss',context),true);
- vm.runInContext('receive(marker);',context);
- assert.equal(vm.runInContext('placement.pose',context),null);
- assert.equal(vm.runInContext('anchor.visible',context),false);
- vm.runInContext('loseMarker({detail:{name:"unrelated"}});receive(marker);',context);
- assert.equal(vm.runInContext('placement.pose',context),null);
- vm.runInContext('loseMarker({detail:{name:"yugemaru-qr"}});marker.detail.position={x:3,y:1,z:-2};size=2.5;angle=4;receive(marker);',context);
- assert.equal(vm.runInContext('anchor.position.value.x',context),4.2);
- assert.equal(vm.runInContext('anchor.position.value.y',context),1);
- assert.equal(vm.runInContext('anchor.position.value.z',context),-3.6);
- assert.equal(vm.runInContext('size',context),1);
- assert.equal(vm.runInContext('visual.rotation.y',context),DEFAULT_MODEL_YAW);
- vm.runInContext('size=1.5;angle=2;placement.lost("yugemaru-qr");receive(marker);',context);
- assert.equal(vm.runInContext('size',context),1.5);
- assert.equal(vm.runInContext('angle',context),2);
- vm.runInContext('placement.lost();',context);
- get('reset').onclick();
- assert.equal(vm.runInContext('waitingForMarkerLoss',context),false);
- vm.runInContext('receive(marker);',context);
- assert.equal(vm.runInContext('anchor.visible',context),true);
- assert.equal(vm.runInContext('size',context),1);
- assert.equal(vm.runInContext('angle',context),DEFAULT_MODEL_YAW);
+ function boot(){
+  const nodes=new Map();let reloads=0;
+  const get=id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);};
+  const context=vm.createContext({window:{},document:{getElementById:get},THREE:{},Placement,DEFAULT_MODEL_YAW,beyondMarker,bindModelGestures:()=>()=>{},location:{reload(){reloads++;}}});
+  vm.runInContext(source,context);
+  return {context,get,reloads:()=>reloads};
+ }
+ const old=boot();
+ vm.runInContext('size=2.8;angle=8;placement.observe({name:"yugemaru-qr",position:{x:3,y:2,z:1},rotation:{x:0,y:0,z:0,w:1}});',old.context);
+ old.get('reset').onclick();
+ assert.equal(old.reloads(),1);
+ const fresh=boot();
+ assert.equal(vm.runInContext('size',fresh.context),1);
+ assert.equal(vm.runInContext('angle',fresh.context),DEFAULT_MODEL_YAW);
+ assert.equal(vm.runInContext('placement.pose',fresh.context),null);
+ assert.equal(vm.runInContext('modelReady',fresh.context),false);
 });
 
 test('QR prompt follows projected QR, hides on loss and behind camera',async()=>{
