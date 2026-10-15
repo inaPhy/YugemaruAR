@@ -1,5 +1,5 @@
 import {Box3,Vector3} from './vendor/three/three.module.js';
-export const INITIAL_WIDTH_METERS=5;
+export const INITIAL_WIDTH_METERS=2;
 // Run on the unattached GLTF scene, before user or marker transforms.
 export function fitModelWidth(model,width=INITIAL_WIDTH_METERS){
   const box=new Box3().setFromObject(model);
