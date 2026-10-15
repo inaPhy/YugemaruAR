@@ -21,3 +21,15 @@ test('reset restores initial transform on next QR and ordinary reacquisition pre
  assert.equal(vm.runInContext('size',context),1.5);
  assert.equal(vm.runInContext('angle',context),2);
 });
+
+test('QR prompt follows projected QR, hides on loss and behind camera',async()=>{
+ const THREE=await import('../dist/vendor/three/three.module.js');
+ const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{style:{},textContent:'',classList:{add(){}},setAttribute(){}});return nodes.get(id);};
+ const camera=new THREE.PerspectiveCamera(60,1,.01,100);camera.updateMatrixWorld();
+ const source=readFileSync(new URL('../dist/ar.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').split('function pipeline(model)')[0];
+ const context=vm.createContext({window:{innerWidth:400,innerHeight:800},document:{getElementById:get,querySelectorAll:()=>[]},THREE,Placement,DEFAULT_MODEL_YAW,beyondMarker,bindModelGestures:()=>()=>{},camera});
+ vm.runInContext(source+`\nxr={Threejs:{xrScene:()=>({camera})}};placement.observe({name:'yugemaru-qr',position:{x:0,y:0,z:-2},rotation:{x:0,y:0,z:0,w:1}});updateQrPrompt();`,context);
+ assert.equal(get('qr-prompt').hidden,false);assert.equal(get('qr-prompt').style.left,'200px');assert.equal(get('qr-prompt').style.top,'400px');
+ vm.runInContext('placement.lost();updateQrPrompt();',context);assert.equal(get('qr-prompt').hidden,true);
+ vm.runInContext('placement.tracking=true;placement.pose.position.z=2;updateQrPrompt();',context);assert.equal(get('qr-prompt').hidden,true);
+});

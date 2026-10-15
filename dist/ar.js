@@ -10,26 +10,25 @@ const placement=new Placement();
 let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetOnNextMarker=false;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
-  window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
+  window.releaseInitialCamera?.();$('qr-prompt').hidden=true;error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
 function update(){
   if(error)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
-    if(placement.tracking)message('QR TRACKING','QRの約2m奥に配置しています',normal?'初期横幅は約2m。ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
-    else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'QRを再び映すと、その約2m奥へ再配置します。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
+    if(placement.tracking)message('QR TRACKING','弓削丸が現れました',normal?'ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
+    else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'ピンチで拡大縮小、スワイプで回転できます。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
     return;
   }
-  message('FIND YOUR QR','同じQRコードを映してください','QR全体と周囲の模様を映してください。初期横幅は約2mです。');
+  message('FIND YOUR QR','同じQRコードを映してください','QRコード全体をカメラに映してください。');
 }
-$('help-toggle').onclick=()=>{const open=$('help').hidden;$('help').hidden=!open;$('help-toggle').setAttribute('aria-expanded',String(open));};
 $('retry').onclick=()=>location.reload();
 const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;controls();}});
 function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>{resetOnNextMarker=true;resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
+$('reset').onclick=()=>{resetOnNextMarker=true;$('qr-prompt').hidden=true;resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
 function receive({detail}){
   if(!modelReady || error)return;
   const pose=placement.observe(detail);
@@ -38,6 +37,17 @@ function receive({detail}){
   const {camera}=xr.Threejs.xrScene();
   anchor.position.copy(beyondMarker(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3())));anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
+}
+function updateQrPrompt(){
+  const label=$('qr-prompt');
+  if(error || !placement.tracking || !placement.pose){label.hidden=true;return;}
+  const {camera}=xr.Threejs.xrScene();
+  const point=new THREE.Vector3().copy(placement.pose.position);
+  const inFront=point.clone().applyMatrix4(camera.matrixWorldInverse).z<0;
+  point.project(camera);
+  const visible=inFront && point.z>=-1 && point.z<=1 && Math.abs(point.x)<.95 && Math.abs(point.y)<.95;
+  label.hidden=!visible;
+  if(visible){label.style.left=`${(point.x+1)*window.innerWidth/2}px`;label.style.top=`${(1-point.y)*window.innerHeight/2}px`;}
 }
 function pipeline(model){return {
   name:'yugemaru-world-placement',
@@ -54,12 +64,12 @@ function pipeline(model){return {
     running=true;modelReady=true;update();
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
-  onUpdate:({processCpuResult})=>{const reality=processCpuResult?.reality;if(reality){const next=reality.trackingStatus==='NORMAL';if(normal!==next){normal=next;update();}}},
+  onUpdate:({processCpuResult})=>{updateQrPrompt();const reality=processCpuResult?.reality;if(reality){const next=reality.trackingStatus==='NORMAL';if(normal!==next){normal=next;update();}}},
   onException:(e)=>{console.error('AR engine error',e);fail('ARを開始・継続できませんでした','この端末のブラウザでカメラとモーションの使用を許可して再読み込みしてください。');},
   listeners:[
     {event:'reality.imagefound',process:receive},
     {event:'reality.imageupdated',process:receive},
-    {event:'reality.imagelost',process:({detail})=>{placement.lost(detail?.name);update();}},
+    {event:'reality.imagelost',process:({detail})=>{placement.lost(detail?.name);$('qr-prompt').hidden=true;update();}},
     {event:'reality.trackingstatus',process:({detail})=>{normal=detail.status==='NORMAL';update();}}
   ]
 };}
