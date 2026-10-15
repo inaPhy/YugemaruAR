@@ -19,6 +19,7 @@ function update(){
   if(error || resetting)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小、スワイプで回転できます。');return;}
+  if(placement.pose){message('POSITION HELD','最後の表示を残しています','QRを映すと位置を更新します。ピンチ・スワイプで操作できます。');return;}
   message('FIND YOUR QR','同じQRコードを映してください','QRコード全体をカメラに映してください。');
 }
 $('retry').onclick=()=>location.reload();
@@ -44,15 +45,15 @@ function receive({detail}){
   const pose=placement.observe(detail);
   if(!pose)return;
   anchor.position.copy(pose.position);anchor.quaternion.copy(pose.rotation);
-  // A two-unit model spans twice the detected QR width; no metric estimation.
+  // The normalized two-unit model spans 20 QR widths at user scale 1.
   const qrWidth=Number.isFinite(detail.scaledWidth)&&detail.scaledWidth>0?detail.scaledWidth:1;
   const targetScale=Number.isFinite(detail.scale)&&detail.scale>0?detail.scale:1;
-  anchor.scale.setScalar(qrWidth*targetScale);
+  anchor.scale.setScalar(qrWidth*targetScale*10);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
 }
 function loseMarker({detail}){
   if(detail?.name && detail.name!=='yugemaru-qr')return;
-  placement.lost(detail?.name);if(anchor)anchor.visible=false;update();
+  placement.lost(detail?.name);update();
 }
 function pipeline(model){return {
   name:'yugemaru-world-placement',

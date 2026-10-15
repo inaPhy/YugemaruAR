@@ -10,14 +10,16 @@ test('camera-only configuration contains no motion requests or recenter',()=>{
  assert.match(full,/disableWorldTracking:true/);assert.match(full,/scale:'responsive'/);
  assert.doesNotMatch(full,/requestPermission|DeviceMotionEvent|DeviceOrientationEvent|\.recenter\(/);
 });
-test('QR center and width drive placement; loss hides; reset restores transform without reload',()=>{
+test('QR center and width drive placement; loss holds; reset restores transform without reload',()=>{
  const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{style:{},textContent:''});return nodes.get(id);};let cleared=0;
  const context=vm.createContext({window:{},document:{getElementById:get,querySelectorAll:()=>[]},THREE,Placement,DEFAULT_MODEL_YAW,bindModelGestures:()=>()=>cleared++});
  vm.runInContext(full.replace(/^import .*;\n/gm,'').split('function loadEngine()')[0]+`\nanchor=new THREE.Group();visual=new THREE.Group();anchor.add(visual);modelReady=true;size=2;angle=4;controls();`,context);
  context.event={detail:{name:'yugemaru-qr',position:{x:1,y:2,z:-3},rotation:{x:0,y:0,z:0,w:1},scale:.5,scaledWidth:.8}};
  vm.runInContext('receive(event)',context);
- assert.equal(vm.runInContext('anchor.position.x',context),1);assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(vm.runInContext('anchor.scale.x',context),.4);
- vm.runInContext('loseMarker(event)',context);assert.equal(vm.runInContext('anchor.visible',context),false);
- get('reset').onclick();assert.equal(cleared,1);assert.equal(vm.runInContext('size',context),1);assert.equal(vm.runInContext('visual.rotation.y',context),DEFAULT_MODEL_YAW);
+ assert.equal(vm.runInContext('anchor.position.x',context),1);assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(vm.runInContext('anchor.scale.x',context),4);
+ vm.runInContext('loseMarker(event)',context);assert.equal(vm.runInContext('anchor.visible',context),true);
+ assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(vm.runInContext('anchor.scale.x',context),4);
+ vm.runInContext('event.detail.position.z=-7;receive(event);',context);assert.equal(vm.runInContext('anchor.position.z',context),-7);
+ get('reset').onclick();assert.equal(vm.runInContext('anchor.visible',context),false);assert.equal(cleared,1);assert.equal(vm.runInContext('size',context),1);assert.equal(vm.runInContext('visual.rotation.y',context),DEFAULT_MODEL_YAW);
  vm.runInContext('receive(event)',context);assert.equal(vm.runInContext('anchor.visible',context),true);
 });
