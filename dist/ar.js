@@ -10,12 +10,13 @@ window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
 const growth=new ModelGrowth();
-let markerWidth=1;
+let markerWidth=1, candidateWidth=1, hasPlaced=false, returnedToQr=false, printing=false;
+const projectedQr=new THREE.Vector3(), cameraQr=new THREE.Vector3();
 let xr, anchor, visual, modelReady=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null, trackingNormal=null;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   if(error)return;
-  error=true;running=false;deferredRun=null;
+  error=true;running=false;deferredRun=null;$('reset').hidden=true;
   try{xr?.stop();}catch(e){console.error('AR stop failed',e);}
   window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
@@ -23,53 +24,59 @@ function update(){
   if(error || resetting)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose && trackingNormal===false){message('TRACKING','周囲をゆっくり映してください','位置を確認しています。QRを映すと配置し直せます。');return;}
+  if(returnedToQr && placement.tracking){message('REPLACE','置き直すにはQR上のボタンをタップ','小さい状態から、もう一度大きくなります。');return;}
   if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小、スワイプで回転できます。');return;}
-  if(placement.pose){message('POSITION HELD','その場所に弓削丸を表示しています','周りから眺めてみましょう。QRを映すと位置を更新します。');return;}
+  if(placement.pose){message('POSITION HELD','その場所に弓削丸を表示しています','周りから眺めてみましょう。置き直す時はQRをもう一度映してください。');return;}
   message('FIND YOUR QR','同じQRコードを映してください','QRコード全体をカメラに映してください。');
 }
 $('retry').onclick=()=>location.reload();
 const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;controls();}});
 function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
-$('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
-$('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
-$('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-function resetPlacement(){
-  if(!modelReady || resetting)return;
-  resetting=true;resetGestures();placement.reset();growth.reset();markerWidth=1;
-  size=1;angle=DEFAULT_MODEL_YAW;
-  anchor.visible=false;anchor.position.set(0,0,0);anchor.quaternion.identity();anchor.scale.setScalar(1);
-  visual.position.set(0,0,0);visual.rotation.set(0,DEFAULT_MODEL_YAW,0);visual.scale.setScalar(1);
-  
-  document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);
-  message('RESET','置き直しています','QRコードを映してください。');
-  resetting=false;update();
+function placeAtQr(){
+  resetGestures();growth.reset();size=1;angle=DEFAULT_MODEL_YAW;
+  visual.position.set(0,0,0);visual.rotation.set(0,angle,0);visual.scale.setScalar(1);
+  anchor.position.copy(placement.pose.position);anchor.quaternion.copy(placement.pose.rotation);
+  markerWidth=candidateWidth;hasPlaced=true;returnedToQr=false;
+  growth.start(performance.now());updateGrowth();anchor.visible=true;
+  $('reset').hidden=true;update();
 }
-$('reset').onclick=resetPlacement;
+$('reset').onclick=()=>{
+  if(!modelReady || error || !hasPlaced || !returnedToQr || !placement.tracking || $('reset').hidden)return;
+  placeAtQr();
+};
 function receive({detail}){
-  if(!modelReady || error || resetting)return;
+  if(!modelReady || error)return;
   const pose=placement.observe(detail);
   if(!pose)return;
-  anchor.quaternion.copy(pose.rotation);
-  // Start at one QR width and grow to thirty in five visible seconds.
   const qrWidth=Number.isFinite(detail.scaledWidth)&&detail.scaledWidth>0?detail.scaledWidth:1;
   const targetScale=Number.isFinite(detail.scale)&&detail.scale>0?detail.scale:1;
-  anchor.position.copy(pose.position);
-  markerWidth=qrWidth*targetScale;
-  growth.start(performance.now());updateGrowth();
-  anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
+  candidateWidth=qrWidth*targetScale;
+  if(!hasPlaced)placeAtQr();
+  updateResetButton();update();
+}
+function updateResetButton(){
+  const button=$('reset');
+  if(error || printing || !hasPlaced || !returnedToQr || !placement.tracking){button.hidden=true;return;}
+  const {camera}=xr.Threejs.xrScene();
+  projectedQr.copy(placement.pose.position);cameraQr.copy(projectedQr).applyMatrix4(camera.matrixWorldInverse);
+  projectedQr.project(camera);
+  const visible=cameraQr.z<0 && projectedQr.z>=-1 && projectedQr.z<=1 && Math.abs(projectedQr.x)<.9 && Math.abs(projectedQr.y)<.9;
+  button.hidden=!visible;
+  if(visible){button.style.left=`${(projectedQr.x+1)*innerWidth/2}px`;button.style.top=`${(1-projectedQr.y)*innerHeight/2}px`;}
 }
 function updateGrowth(){
   if(anchor && placement.pose && !error)anchor.scale.setScalar(markerWidth*growth.tick(performance.now())/2);
 }
 function loseMarker({detail}){
   if(detail?.name && detail.name!=='yugemaru-qr')return;
-  placement.lost(detail?.name);update();
+  if(hasPlaced && placement.tracking)returnedToQr=true;
+  placement.lost(detail?.name);$('reset').hidden=true;update();
 }
 function pipeline(model){return {
   name:'yugemaru-world-placement',
   onStart:()=>{
     if(error || departed){xr.stop();return;}
-    if(modelReady){if(document.hidden)xr.pause();return;}
+    if(modelReady){if(document.hidden || printing)xr.pause();return;}
     const {scene,camera,renderer}=xr.Threejs.xrScene();
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     scene.add(new THREE.HemisphereLight(0xffffff,0x899887,2));
@@ -79,11 +86,11 @@ function pipeline(model){return {
     const surface=new THREE.Group();surface.rotation.x=Math.PI/2;
     visual=new THREE.Group();visual.rotation.y=DEFAULT_MODEL_YAW;visual.add(model);surface.add(visual);anchor.add(surface);scene.add(anchor);
     camera.position.set(0,0,0);xr.XrController.updateCameraProjectionMatrix({origin:camera.position,facing:camera.quaternion});
-    running=true;modelReady=true;if(document.hidden)xr.pause();update();
+    running=true;modelReady=true;if(document.hidden || printing)xr.pause();update();
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
 
-  onUpdate:({processCpuResult})=>{updateGrowth();const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
+  onUpdate:({processCpuResult})=>{updateGrowth();updateResetButton();const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
   onException:(e)=>{console.error('AR engine error',e);fail('ARを開始・継続できませんでした','この端末のブラウザでカメラの使用を許可して再読み込みしてください。');},
   listeners:[
     {event:'reality.imagefound',process:receive},
@@ -130,5 +137,7 @@ async function start(){
 }
 window.addEventListener('pagehide',()=>{departed=true;running=false;deferredRun=null;window.releaseInitialCamera?.();if(xr)xr.stop();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-document.addEventListener('visibilitychange',()=>{growth.pause();if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden)xr.pause();else xr.resume();});
+document.addEventListener('visibilitychange',()=>{growth.pause();if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden || printing)xr.pause();else xr.resume();});
+window.addEventListener('beforeprint',()=>{printing=true;growth.pause();$('reset').hidden=true;if(xr && running)xr.pause();});
+window.addEventListener('afterprint',()=>{printing=false;growth.pause();if(xr && running && !error && !departed && !document.hidden)xr.resume();});
 start();

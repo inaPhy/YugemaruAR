@@ -11,19 +11,20 @@ test('world tracking enabled; reset never recenters camera',()=>{
  assert.match(full,/disableWorldTracking:false/);assert.match(full,/scale:'responsive'/);
  assert.match(full,/await requestMotionPermission\(\)/);assert.doesNotMatch(full,/\.recenter\(/);
 });
-test('QR center and width drive placement; loss holds; reset restores transform without reload',()=>{
- const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{style:{},textContent:''});return nodes.get(id);};let cleared=0;
- const context=vm.createContext({window:{},document:{getElementById:get,querySelectorAll:()=>[]},THREE,Placement,ModelGrowth,performance:{now:()=>0},DEFAULT_MODEL_YAW,bindModelGestures:()=>()=>cleared++});
- vm.runInContext(full.replace(/^import .*;\n/gm,'').split('function loadEngine()')[0]+`\nxr={Threejs:{xrScene:()=>({camera:new THREE.PerspectiveCamera()})}};anchor=new THREE.Group();visual=new THREE.Group();anchor.add(visual);modelReady=true;size=2;angle=4;controls();`,context);
- context.event={detail:{name:'yugemaru-qr',position:{x:0,y:2,z:-3},rotation:{x:0,y:0,z:0,w:1},scale:.5,scaledWidth:.8}};
+test('reacquired QR offers reset; model moves and growth restarts only after tap',()=>{
+ const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{hidden:true,style:{},textContent:''});return nodes.get(id);};let cleared=0;
+ const context=vm.createContext({window:{},innerWidth:390,innerHeight:844,document:{getElementById:get},THREE,Placement,ModelGrowth,performance:{now:()=>0},DEFAULT_MODEL_YAW,bindModelGestures:()=>()=>cleared++});
+ vm.runInContext(full.replace(/^import .*;\n/gm,'').split('function loadEngine()')[0]+`
+xr={Threejs:{xrScene:()=>({camera:new THREE.PerspectiveCamera(60,390/844,.01,100)})}};anchor=new THREE.Group();visual=new THREE.Group();anchor.add(visual);modelReady=true;`,context);
+ context.event={detail:{name:'yugemaru-qr',position:{x:0,y:0,z:-3},rotation:{x:0,y:0,z:0,w:1},scale:.5,scaledWidth:.8}};
  vm.runInContext('receive(event)',context);
- assert.equal(vm.runInContext('anchor.position.x',context),0);assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(vm.runInContext('anchor.scale.x',context),.2);
- vm.runInContext('loseMarker(event)',context);assert.equal(vm.runInContext('anchor.visible',context),true);
- assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(vm.runInContext('anchor.scale.x',context),.2);
- vm.runInContext('performance.now=()=>5000;pipeline(null).onUpdate({});',context);
- assert.equal(vm.runInContext('anchor.scale.x',context),6);
+ assert.equal(get('reset').hidden,true);assert.equal(vm.runInContext('anchor.scale.x',context),.2);
+ vm.runInContext('performance.now=()=>5000;pipeline(null).onUpdate({});loseMarker(event);',context);
+ assert.equal(vm.runInContext('anchor.scale.x',context),6);assert.equal(get('reset').hidden,true);
  vm.runInContext('event.detail.position.z=-7;receive(event);',context);
- assert.equal(vm.runInContext('anchor.scale.x',context),6);assert.equal(vm.runInContext('anchor.position.z',context),-7);
- get('reset').onclick();assert.equal(vm.runInContext('anchor.visible',context),false);assert.equal(cleared,1);assert.equal(vm.runInContext('size',context),1);assert.equal(vm.runInContext('visual.rotation.y',context),DEFAULT_MODEL_YAW);
- vm.runInContext('receive(event)',context);assert.equal(vm.runInContext('anchor.visible',context),true);assert.equal(vm.runInContext('anchor.scale.x',context),.2);
+ assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(get('reset').hidden,false);assert.equal(get('reset').style.left,'195px');
+ get('reset').onclick();
+ assert.equal(vm.runInContext('anchor.position.z',context),-7);assert.equal(vm.runInContext('anchor.scale.x',context),.2);assert.equal(get('reset').hidden,true);assert.equal(cleared,2);
+ vm.runInContext('receive(event);',context);assert.equal(get('reset').hidden,true);
+ vm.runInContext('loseMarker(event);event.detail.position.z=3;receive(event);',context);assert.equal(get('reset').hidden,true);
 });

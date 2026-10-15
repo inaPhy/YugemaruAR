@@ -16,3 +16,15 @@ header{flex-shrink:0}
 
 #qr-prompt{position:fixed;z-index:3;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;background:#f5f3e9f2;color:#173e37;border:1px solid #ffffffaa;border-radius:24px;padding:10px 18px;font-size:17px;font-weight:800;box-shadow:0 3px 18px #0003}
 .brand{letter-spacing:.04em;font-size:18px}
+#print-qr{font-size:11px;min-height:36px;padding:7px 12px;background:#173e3788}
+#reset{position:fixed;z-index:4;transform:translate(-50%,-50%);white-space:nowrap;min-height:48px;border:2px solid #fff;background:#173e37f5;box-shadow:0 3px 16px #0005;font-weight:700;touch-action:manipulation}
+#print-sheet{display:none}
+@page{size:A4 portrait;margin:15mm}
+@media print{
+  :root,body{background:white!important;color:#173e37;overflow:visible}
+  body>*{display:none!important}
+  #print-sheet{display:block!important;text-align:center;break-inside:avoid}
+  #print-sheet h1{font-size:22pt;margin:0 0 10mm}
+  #print-sheet img{display:block;width:170mm;max-width:100%;height:auto;margin:auto;image-rendering:pixelated}
+  #print-sheet p{font-size:12pt;margin:8mm 0}
+}
