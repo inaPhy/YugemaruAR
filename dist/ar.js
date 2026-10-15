@@ -13,7 +13,7 @@ function fail(title,hint='SafariまたはChromeで開き直し、カメラの権
 }
 function update(){
   if(error)return;
-  if(!modelReady){message('LOADING','ゆげまるを読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
+  if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
     if(placement.tracking)message('QR TRACKING','QRの位置に追従しています',normal?'初期横幅は約2m。ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
     else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'QRを再び映すと、その位置へ再配置します。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
