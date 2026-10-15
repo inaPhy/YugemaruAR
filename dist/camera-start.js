@@ -13,7 +13,8 @@
     }
     try {
       stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}}, audio: false});
-      if (disposed) window.releaseInitialCamera();
+      // This stream only checks permission; the AR engine owns its own camera.
+      window.releaseInitialCamera();
       return {ok: true};
     } catch (error) {
       return {ok: false, name: error.name};

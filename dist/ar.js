@@ -7,9 +7,12 @@ import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
+  if(error)return;
+  error=true;running=false;deferredRun=null;
+  try{xr?.stop();}catch(e){console.error('AR stop failed',e);}
   window.releaseInitialCamera?.();$('qr-prompt').hidden=true;error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
 function update(){
@@ -68,6 +71,8 @@ function updateQrPrompt(){
 function pipeline(model){return {
   name:'yugemaru-world-placement',
   onStart:()=>{
+    if(error || departed){xr.stop();return;}
+    if(modelReady){if(document.hidden)xr.pause();return;}
     const {scene,camera,renderer}=xr.Threejs.xrScene();
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     scene.add(new THREE.HemisphereLight(0xffffff,0x899887,2));
@@ -77,7 +82,7 @@ function pipeline(model){return {
     const surface=new THREE.Group();surface.rotation.x=Math.PI/2;
     visual=new THREE.Group();visual.rotation.y=DEFAULT_MODEL_YAW;visual.add(model);surface.add(visual);anchor.add(surface);scene.add(anchor);
     camera.position.set(0,2,0);xr.XrController.updateCameraProjectionMatrix({origin:camera.position,facing:camera.quaternion});
-    running=true;modelReady=true;update();
+    running=true;modelReady=true;if(document.hidden)xr.pause();update();
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
   onUpdate:({processCpuResult})=>{if(resetting){resetting=false;update();return;}updateQrPrompt();const reality=processCpuResult?.reality;if(reality){const next=reality.trackingStatus==='NORMAL';if(normal!==next){normal=next;update();}}},
@@ -102,14 +107,16 @@ async function start(){
   if(!isSecureContext || !navigator.mediaDevices?.getUserMedia){fail('カメラを利用できません','HTTPSのURLをSafariまたはChromeで開いてください。');return;}
   try{
     const permission=await window.initialCameraPermission;
+    if(departed)return;
     if(!permission?.ok){fail('カメラを開始できませんでした',permission?.name==='NotAllowedError'?'サイトのカメラ権限を許可し、再読み込みしてください。':'カメラが使用できる状態か確認して再読み込みしてください。');return;}
     message('LOADING','ARを準備しています','カメラの許可を確認しました。');
     const [engine,model,target]=await Promise.all([loadEngine(),loadModel(),fetch('image-targets/yugemaru-qr.json').then(r=>{if(!r.ok)throw new Error('target-download');return r.json();})]);
+    if(departed || error)return;
     xr=engine;
     xr.XrController.configure({disableWorldTracking:false,imageTargetData:[target],scale:'absolute'});
     xr.addCameraPipelineModules([xr.GlTextureRenderer.pipelineModule(),xr.Threejs.pipelineModule(),xr.XrController.pipelineModule(),pipeline(model)]);
     fitCanvas();window.addEventListener('resize',fitCanvas);
-    const run=()=>{window.releaseInitialCamera?.();message('PERMISSION','カメラの使用を許可してください','QRコード全体を映すと、自動で配置します。');try{xr.run({canvas:$('camerafeed'),allowedDevices:xr.XrConfig.device().MOBILE,cameraConfig:{direction:xr.XrConfig.camera().BACK}});}catch(e){fail('この端末でARを開始できませんでした','iPhone・AndroidのブラウザからQRコードを開いてください。');}};
+    const run=()=>{if(departed || error || runRequested)return;if(document.hidden){deferredRun=run;return;}deferredRun=null;runRequested=true;window.releaseInitialCamera?.();message('PERMISSION','カメラの使用を許可してください','QRコード全体を映すと、自動で配置します。');try{xr.run({canvas:$('camerafeed'),allowedDevices:xr.XrConfig.device().MOBILE,cameraConfig:{direction:xr.XrConfig.camera().BACK}});}catch(e){fail('この端末でARを開始できませんでした','iPhone・AndroidのブラウザからQRコードを開いてください。');}};
     // Previously granted motion permission can continue automatically. A first
     // grant may require a real user gesture; it must never gate camera permission.
     if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
@@ -124,7 +131,7 @@ async function start(){
     }else run();
   }catch(e){console.error('AR startup failed',e);fail('ARの準備に失敗しました','通信状態を確認し、再読み込みしてください。');}
 }
-window.addEventListener('pagehide',()=>{if(xr)xr.stop();});
+window.addEventListener('pagehide',()=>{departed=true;running=false;deferredRun=null;window.releaseInitialCamera?.();if(xr)xr.stop();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-document.addEventListener('visibilitychange',()=>{if(!xr||!running||error)return;if(document.hidden)xr.pause();else xr.resume();});
+document.addEventListener('visibilitychange',()=>{if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden)xr.pause();else xr.resume();});
 start();
