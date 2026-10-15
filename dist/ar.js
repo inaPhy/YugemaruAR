@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {bindModelGestures} from './gestures.mjs';
 import {fitModelWidth} from './model-size.mjs';
+import {DEFAULT_MODEL_YAW,beyondMarker} from './model-pose.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=0, running=false;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
@@ -15,8 +16,8 @@ function update(){
   if(error)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
-    if(placement.tracking)message('QR TRACKING','QRの位置に追従しています',normal?'初期横幅は約2m。ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
-    else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'QRを再び映すと、その位置へ再配置します。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
+    if(placement.tracking)message('QR TRACKING','QRの約2m奥に配置しています',normal?'初期横幅は約2m。ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
+    else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'QRを再び映すと、その約2m奥へ再配置します。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
     return;
   }
   message('FIND YOUR QR','同じQRコードを映してください','QR全体と周囲の模様を映してください。初期横幅は約2mです。');
@@ -28,12 +29,13 @@ function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>{resetGestures();placement.reset();anchor.visible=false;size=1;angle=0;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
+$('reset').onclick=()=>{resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
 function receive({detail}){
   if(!modelReady || error)return;
   const pose=placement.observe(detail);
   if(!pose)return;
-  anchor.position.copy(pose.position);anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
+  const {camera}=xr.Threejs.xrScene();
+  anchor.position.copy(beyondMarker(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3())));anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
 }
 function pipeline(model){return {
@@ -46,7 +48,7 @@ function pipeline(model){return {
     anchor=new THREE.Group();anchor.visible=false;
     // QR target is in XY, facing +Z. Rotate the model's up axis to target +Z.
     const surface=new THREE.Group();surface.rotation.x=Math.PI/2;
-    visual=new THREE.Group();visual.add(model);surface.add(visual);anchor.add(surface);scene.add(anchor);
+    visual=new THREE.Group();visual.rotation.y=DEFAULT_MODEL_YAW;visual.add(model);surface.add(visual);anchor.add(surface);scene.add(anchor);
     camera.position.set(0,2,0);xr.XrController.updateCameraProjectionMatrix({origin:camera.position,facing:camera.quaternion});
     running=true;modelReady=true;update();
   },

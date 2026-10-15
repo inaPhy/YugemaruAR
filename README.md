@@ -1,8 +1,8 @@
 # YugemaruAR
 
-同じQRコードをWebARへの入口と配置の画像ターゲットとして使用する。QRが見えている間は有効な位置・回転を毎回反映する。見失ったときだけ最後の世界座標を保持し、再検出したら新しいQR位置へ再配置する。ピンチの倍率とスワイプの回転は再検出後も維持。「置き直す」で配置と操作量をリセットする。
+同じQRコードをWebARへの入口と配置の画像ターゲットとして使用する。QRが見えている間は有効な位置・回転を毎回反映する。見失ったときだけ最後の世界座標を保持し、再検出したら新しいQR位置を基準に再配置する。カメラからQRへ向かう水平な方向へ約2m奥に配置し、QR消失時はその位置を保持する。ピンチの倍率とスワイプの回転は再検出後も維持。「置き直す」で配置と操作量をリセットする。
 
-初期モデルのローカルX方向（横幅）を2mに合わせ、縦横比を維持する。8th Wallの `scale: absolute` でメートル単位の座標を使用。マーカーのscaleはモデル倍率へ掛けない。横幅は端末による実寸推定に依存するため約2mであり、実機での測量精度は未確認。
+初期の向きは横向き（90度回転）。初期モデルのローカルX方向（横幅）を2mに合わせ、縦横比を維持する。8th Wallの `scale: absolute` でメートル単位の座標を使用。マーカーのscaleはモデル倍率へ掛けない。横幅は端末による実寸推定に依存するため約2mであり、実機での測量精度は未確認。
 
 ## 利用
 
@@ -13,7 +13,7 @@
 
 現在の配信先: https://yugemaru-ar.inaphy-ai.chatgpt.site （所有者限定）
 
-`index.html` が直接ARを開始。`ar.html` は旧URLからの転送。`model.html` はカメラ不要の3D確認。
+`index.html` が直接ARを開始。`ar.html` は旧URLからの転送。`model.html` はカメラ不要の3D確認。ARと共通のピンチ拡大縮小・左右スワイプ回転に対応し、パソコンではドラッグ・ホイールでも操作できる。
 
 ## 技術
 
@@ -37,4 +37,4 @@
 
 ## 出典・ライセンス
 
-モデルの権利は提供元に帰属する。8th Wall配布バイナリはMITではなくXR Engine License Agreementに従う。Copyright © 2026 Niantic Spatial, Inc. All rights reserved. 契約本文・保証免責: `dist/vendor/xr/LICENSE`。three.jsはMIT（`dist/vendor/three/LICENSE`）。カメラ不要の3D確認にはA-Frame 1.6.0（MIT）を使用。
+モデルの権利は提供元に帰属する。8th Wall配布バイナリはMITではなくXR Engine License Agreementに従う。Copyright © 2026 Niantic Spatial, Inc. All rights reserved. 契約本文・保証免責: `dist/vendor/xr/LICENSE`。three.jsはMIT（`dist/vendor/three/LICENSE`）。カメラ不要の3D確認もthree.jsを使用。
