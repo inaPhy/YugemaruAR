@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {bindModelGestures} from './gestures.mjs';
 import {fitModelWidth} from './model-size.mjs';
-import {DEFAULT_MODEL_YAW,beyondQr} from './model-pose.mjs';
+import {DEFAULT_MODEL_YAW} from './model-pose.mjs';
 import {requestMotionPermission} from './motion-permission.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
@@ -47,12 +47,11 @@ function receive({detail}){
   const pose=placement.observe(detail);
   if(!pose)return;
   anchor.quaternion.copy(pose.rotation);
-  // The normalized two-unit model spans 20 QR widths at user scale 1.
+  // The normalized two-unit model spans 10 QR widths at user scale 1.
   const qrWidth=Number.isFinite(detail.scaledWidth)&&detail.scaledWidth>0?detail.scaledWidth:1;
   const targetScale=Number.isFinite(detail.scale)&&detail.scale>0?detail.scale:1;
-  const {camera}=xr.Threejs.xrScene();
-  anchor.position.copy(beyondQr(pose.position,camera.getWorldPosition(new THREE.Vector3()),qrWidth*targetScale,camera.getWorldDirection(new THREE.Vector3())));
-  anchor.scale.setScalar(qrWidth*targetScale*10);
+  anchor.position.copy(pose.position);
+  anchor.scale.setScalar(qrWidth*targetScale*5);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
 }
 function loseMarker({detail}){
