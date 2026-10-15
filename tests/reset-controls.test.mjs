@@ -6,9 +6,9 @@ import * as THREE from '../dist/vendor/three/three.module.js';
 import {Placement} from '../dist/placement.mjs';
 import {DEFAULT_MODEL_YAW} from '../dist/model-pose.mjs';
 const full=readFileSync(new URL('../dist/ar.js',import.meta.url),'utf8');
-test('camera-only configuration contains no motion requests or recenter',()=>{
- assert.match(full,/disableWorldTracking:true/);assert.match(full,/scale:'responsive'/);
- assert.doesNotMatch(full,/requestPermission|DeviceMotionEvent|DeviceOrientationEvent|\.recenter\(/);
+test('world tracking enabled; reset never recenters camera',()=>{
+ assert.match(full,/disableWorldTracking:false/);assert.match(full,/scale:'responsive'/);
+ assert.match(full,/await requestMotionPermission\(\)/);assert.doesNotMatch(full,/\.recenter\(/);
 });
 test('QR center and width drive placement; loss holds; reset restores transform without reload',()=>{
  const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{style:{},textContent:''});return nodes.get(id);};let cleared=0;
