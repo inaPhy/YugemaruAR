@@ -4,10 +4,13 @@ import {bindModelGestures} from './gestures.mjs';
 import {fitModelWidth} from './model-size.mjs';
 import {DEFAULT_MODEL_YAW} from './model-pose.mjs';
 import {requestMotionPermission} from './motion-permission.mjs';
+import {ModelGrowth} from './growth.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
+const growth=new ModelGrowth();
+let markerWidth=1;
 let xr, anchor, visual, modelReady=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null, trackingNormal=null;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
@@ -32,7 +35,7 @@ $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
 function resetPlacement(){
   if(!modelReady || resetting)return;
-  resetting=true;resetGestures();placement.reset();
+  resetting=true;resetGestures();placement.reset();growth.reset();markerWidth=1;
   size=1;angle=DEFAULT_MODEL_YAW;
   anchor.visible=false;anchor.position.set(0,0,0);anchor.quaternion.identity();anchor.scale.setScalar(1);
   visual.position.set(0,0,0);visual.rotation.set(0,DEFAULT_MODEL_YAW,0);visual.scale.setScalar(1);
@@ -47,12 +50,16 @@ function receive({detail}){
   const pose=placement.observe(detail);
   if(!pose)return;
   anchor.quaternion.copy(pose.rotation);
-  // The normalized two-unit model spans 10 QR widths at user scale 1.
+  // Start at one QR width and grow to thirty in five visible seconds.
   const qrWidth=Number.isFinite(detail.scaledWidth)&&detail.scaledWidth>0?detail.scaledWidth:1;
   const targetScale=Number.isFinite(detail.scale)&&detail.scale>0?detail.scale:1;
   anchor.position.copy(pose.position);
-  anchor.scale.setScalar(qrWidth*targetScale*5);
+  markerWidth=qrWidth*targetScale;
+  growth.start(performance.now());updateGrowth();
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
+}
+function updateGrowth(){
+  if(anchor && placement.pose && !error)anchor.scale.setScalar(markerWidth*growth.tick(performance.now())/2);
 }
 function loseMarker({detail}){
   if(detail?.name && detail.name!=='yugemaru-qr')return;
@@ -76,7 +83,7 @@ function pipeline(model){return {
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
 
-  onUpdate:({processCpuResult})=>{const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
+  onUpdate:({processCpuResult})=>{updateGrowth();const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
   onException:(e)=>{console.error('AR engine error',e);fail('ARを開始・継続できませんでした','この端末のブラウザでカメラの使用を許可して再読み込みしてください。');},
   listeners:[
     {event:'reality.imagefound',process:receive},
@@ -123,5 +130,5 @@ async function start(){
 }
 window.addEventListener('pagehide',()=>{departed=true;running=false;deferredRun=null;window.releaseInitialCamera?.();if(xr)xr.stop();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-document.addEventListener('visibilitychange',()=>{if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden)xr.pause();else xr.resume();});
+document.addEventListener('visibilitychange',()=>{growth.pause();if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden)xr.pause();else xr.resume();});
 start();
