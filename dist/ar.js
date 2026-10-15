@@ -7,13 +7,14 @@ import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetOnNextMarker=false;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetOnNextMarker=false, waitingForMarkerLoss=false;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   window.releaseInitialCamera?.();$('qr-prompt').hidden=true;error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
 function update(){
   if(error)return;
+  if(waitingForMarkerLoss){message('RESET','QRを一度画面から外してください','もう一度映すと、初期の大きさ・向きで置き直します。');return;}
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
     if(placement.tracking)message('QR TRACKING','弓削丸が現れました',normal?'ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
@@ -28,15 +29,20 @@ function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>{resetOnNextMarker=true;$('qr-prompt').hidden=true;resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
+$('reset').onclick=()=>{waitingForMarkerLoss=placement.tracking;resetOnNextMarker=true;$('qr-prompt').hidden=true;resetGestures();placement.reset();anchor.visible=false;size=1;angle=DEFAULT_MODEL_YAW;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
 function receive({detail}){
-  if(!modelReady || error)return;
+  if(!modelReady || error || waitingForMarkerLoss)return;
   const pose=placement.observe(detail);
   if(!pose)return;
   if(resetOnNextMarker){resetGestures();size=1;angle=DEFAULT_MODEL_YAW;controls();resetOnNextMarker=false;}
   const {camera}=xr.Threejs.xrScene();
   anchor.position.copy(beyondMarker(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3())));anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
+}
+function loseMarker({detail}){
+  if(detail?.name && detail.name!=='yugemaru-qr')return;
+  waitingForMarkerLoss=false;
+  placement.lost(detail?.name);$('qr-prompt').hidden=true;update();
 }
 function updateQrPrompt(){
   const label=$('qr-prompt');
@@ -69,7 +75,7 @@ function pipeline(model){return {
   listeners:[
     {event:'reality.imagefound',process:receive},
     {event:'reality.imageupdated',process:receive},
-    {event:'reality.imagelost',process:({detail})=>{placement.lost(detail?.name);$('qr-prompt').hidden=true;update();}},
+    {event:'reality.imagelost',process:loseMarker},
     {event:'reality.trackingstatus',process:({detail})=>{normal=detail.status==='NORMAL';update();}}
   ]
 };}
