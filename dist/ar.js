@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {bindModelGestures} from './gestures.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
@@ -7,21 +8,22 @@ const placement=new Placement();
 let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=0, running=false;
 function message(phase,title,hint){$('phase').textContent=phase;$('status').textContent=title;$('hint').textContent=hint;}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
-  error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
+  window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
 }
 function update(){
   if(error)return;
   if(!modelReady){message('LOADING','ゆげまるを読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
-  if(placement.pose){message(normal?'PLACED':'TRACKING',normal?'ゆげまるを配置しました':'周囲をゆっくり映してください',normal?'QRコードから離れて、周りから眺めてみましょう。':'位置を再確認しています。QRを再認識しても配置は勝手に変わりません。');return;}
+  if(placement.pose){message(normal?'PLACED':'TRACKING',normal?'ゆげまるを配置しました':'周囲をゆっくり映してください',normal?'ピンチで拡大・縮小、左右スワイプで回転できます。':'位置を再確認しています。QRを再認識しても配置は勝手に変わりません。');return;}
   message('FIND YOUR QR','同じQRコードを映してください',normal?'QR全体を映して、少しだけ静止してください。':'QRと周囲の模様を映しながら、端末をゆっくり動かしてください。');
 }
 $('help-toggle').onclick=()=>{const open=$('help').hidden;$('help').hidden=!open;$('help-toggle').setAttribute('aria-expanded',String(open));};
 $('retry').onclick=()=>location.reload();
+const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;controls();}});
 function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 $('smaller').onclick=()=>{size=Math.max(.3,size-.15);controls();};
 $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
-$('reset').onclick=()=>{placement.reset();anchor.visible=false;size=1;angle=0;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
+$('reset').onclick=()=>{resetGestures();placement.reset();anchor.visible=false;size=1;angle=0;controls();document.querySelectorAll('#actions button').forEach(b=>b.disabled=true);update();};
 function receive({detail}){
   if(!modelReady || error)return;
   const pose=placement.observe(detail,normal,performance.now());
@@ -68,16 +70,22 @@ function fitCanvas(){const canvas=$('camerafeed');canvas.width=window.innerWidth
 async function start(){
   if(!isSecureContext || !navigator.mediaDevices?.getUserMedia){fail('カメラを利用できません','HTTPSのURLをSafariまたはChromeで開いてください。');return;}
   try{
+    const permission=await window.initialCameraPermission;
+    if(!permission?.ok){fail('カメラを開始できませんでした',permission?.name==='NotAllowedError'?'サイトのカメラ権限を許可し、再読み込みしてください。':'カメラが使用できる状態か確認して再読み込みしてください。');return;}
+    message('LOADING','ARを準備しています','カメラの許可を確認しました。');
     const [engine,model,target]=await Promise.all([loadEngine(),loadModel(),fetch('image-targets/yugemaru-qr.json').then(r=>{if(!r.ok)throw new Error('target-download');return r.json();})]);
     xr=engine;
     xr.XrController.configure({disableWorldTracking:false,imageTargetData:[target],scale:'responsive'});
     xr.addCameraPipelineModules([xr.GlTextureRenderer.pipelineModule(),xr.Threejs.pipelineModule(),xr.XrController.pipelineModule(),pipeline(model)]);
     fitCanvas();window.addEventListener('resize',fitCanvas);
-    const run=()=>{message('PERMISSION','カメラの使用を許可してください','QRコード全体を映すと、自動で配置します。');try{xr.run({canvas:$('camerafeed'),allowedDevices:xr.XrConfig.device().MOBILE,cameraConfig:{direction:xr.XrConfig.camera().BACK}});}catch(e){fail('この端末でARを開始できませんでした','iPhone・AndroidのブラウザからQRコードを開いてください。');}};
-    // iOS requires an actual tap for motion permission. Do not promise that this
-    // OS permission can be granted automatically by a page navigation.
+    const run=()=>{window.releaseInitialCamera?.();message('PERMISSION','カメラの使用を許可してください','QRコード全体を映すと、自動で配置します。');try{xr.run({canvas:$('camerafeed'),allowedDevices:xr.XrConfig.device().MOBILE,cameraConfig:{direction:xr.XrConfig.camera().BACK}});}catch(e){fail('この端末でARを開始できませんでした','iPhone・AndroidのブラウザからQRコードを開いてください。');}};
+    // Previously granted motion permission can continue automatically. A first
+    // grant may require a real user gesture; it must never gate camera permission.
     if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-      message('PERMISSION','端末の動きの使用を許可してください','空間の同じ場所に表示するため、モーションとカメラを使います。');
+      let motionGranted=false;
+      try{motionGranted=(await DeviceOrientationEvent.requestPermission())==='granted';}catch{}
+      if(motionGranted){run();return;}
+      message('PERMISSION','端末の動きを許可してください','カメラは許可済みです。空間に固定するため、端末の動きも許可してください。');
       $('permission').hidden=false;
       $('permission').onclick=async()=>{
         try{const result=await DeviceOrientationEvent.requestPermission();if(result!=='granted')throw new Error('denied');$('permission').hidden=true;run();}catch(e){fail('端末の動きが許可されませんでした','Safariのサイト設定を確認し、再読み込みしてください。');}
