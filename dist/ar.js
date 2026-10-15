@@ -4,18 +4,21 @@ import {bindModelGestures} from './gestures.mjs';
 import {fitModelWidth} from './model-size.mjs';
 import {DEFAULT_MODEL_YAW} from './model-pose.mjs';
 import {requestMotionPermission} from './motion-permission.mjs';
+import {ModelAnimation} from './model-animation.mjs';
 import {ModelGrowth} from './growth.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
 const growth=new ModelGrowth();
+let modelAnimation;
 let markerWidth=1, candidateWidth=1, hasPlaced=false, returnedToQr=false, printing=false;
 const projectedQr=new THREE.Vector3(), cameraQr=new THREE.Vector3();
 let xr, anchor, visual, modelReady=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null, trackingNormal=null;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   if(error)return;
+  modelAnimation?.pause();
   error=true;running=false;deferredRun=null;$('reset').hidden=true;
   try{xr?.stop();}catch(e){console.error('AR stop failed',e);}
   window.releaseInitialCamera?.();error=true;$('hud').classList.add('error');message('CHECK',title,hint);$('retry').hidden=false;
@@ -90,7 +93,7 @@ function pipeline(model){return {
   },
   onCameraStatusChange:({status})=>{if(status==='failed')fail('カメラを開始できませんでした');else if(status==='requesting')message('PERMISSION','カメラの使用を許可してください','このページの中でカメラを使います。');},
 
-  onUpdate:({processCpuResult})=>{updateGrowth();updateResetButton();const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
+  onUpdate:({processCpuResult})=>{modelAnimation?.update(performance.now(),!!anchor?.visible && !error && !printing && !document.hidden);updateGrowth();updateResetButton();const status=processCpuResult?.reality?.trackingStatus;if(!status)return;const next=status==='NORMAL';if(trackingNormal!==next){trackingNormal=next;update();}},
   onException:(e)=>{console.error('AR engine error',e);fail('ARを開始・継続できませんでした','この端末のブラウザでカメラの使用を許可して再読み込みしてください。');},
   listeners:[
     {event:'reality.imagefound',process:receive},
@@ -105,7 +108,12 @@ function loadEngine(){return new Promise((resolve,reject)=>{
   const script=document.createElement('script');script.src='vendor/xr/xr.js';script.async=true;script.dataset.preloadChunks='slam';
   script.onerror=()=>{clearTimeout(timeout);reject(new Error('engine-download'));};document.head.appendChild(script);
 });}
-function loadModel(){return new GLTFLoader().loadAsync('assets/yugemaru.glb').then(gltf=>fitModelWidth(gltf.scene));}
+function loadModel(){return new GLTFLoader().loadAsync('assets/yugemaru.glb').then(gltf=>{
+  // Keep normalization outside the animated root so authored transforms stay intact.
+  const model=new THREE.Group();model.add(gltf.scene);fitModelWidth(model);
+  if(!departed && !error)modelAnimation=new ModelAnimation(gltf.scene,gltf.animations);
+  return model;
+});}
 function fitCanvas(){const canvas=$('camerafeed');canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
 async function start(){
   if(!isSecureContext || !navigator.mediaDevices?.getUserMedia){fail('カメラを利用できません','HTTPSのURLをSafariまたはChromeで開いてください。');return;}
@@ -135,9 +143,9 @@ async function start(){
     };
   }catch(e){console.error('AR startup failed',e);fail('ARの準備に失敗しました','通信状態を確認し、再読み込みしてください。');}
 }
-window.addEventListener('pagehide',()=>{departed=true;running=false;deferredRun=null;window.releaseInitialCamera?.();if(xr)xr.stop();});
+window.addEventListener('pagehide',()=>{modelAnimation?.dispose();departed=true;running=false;deferredRun=null;window.releaseInitialCamera?.();if(xr)xr.stop();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-document.addEventListener('visibilitychange',()=>{growth.pause();if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden || printing)xr.pause();else xr.resume();});
-window.addEventListener('beforeprint',()=>{printing=true;growth.pause();$('reset').hidden=true;if(xr && running)xr.pause();});
-window.addEventListener('afterprint',()=>{printing=false;growth.pause();if(xr && running && !error && !departed && !document.hidden)xr.resume();});
+document.addEventListener('visibilitychange',()=>{growth.pause();modelAnimation?.pause();if(error||departed)return;if(!document.hidden && deferredRun){deferredRun();return;}if(!xr||!running)return;if(document.hidden || printing)xr.pause();else xr.resume();});
+window.addEventListener('beforeprint',()=>{printing=true;growth.pause();modelAnimation?.pause();$('reset').hidden=true;if(xr && running)xr.pause();});
+window.addEventListener('afterprint',()=>{printing=false;growth.pause();modelAnimation?.pause();if(xr && running && !error && !departed && !document.hidden)xr.resume();});
 start();
