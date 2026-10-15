@@ -1,25 +1,38 @@
 # YugemaruAR
 
-QRコードからアクセスし、印刷したHiroマーカー上にゆげまるを表示するブラウザAR。外部ARアプリへの遷移は使用しません。
+同じQRコードをWebARへの入口と初期配置の画像ターゲットとして使用する。QRを約0.45秒以上安定検出し、SLAMがNORMAL状態になった時点の位置・回転・スケールを世界座標に保存する。その後はQRが見えなくなってもモデルを非表示にせず、カメラの6DoF移動を8th Wallで追跡する。後からQRを動かしても追従しない。「置き直す」でのみ再配置する。
 
-## 起動
+## 利用
+
+1. `marker.html` のQRを印刷（白い余白を保持、推奨約9cm角）。
+2. スマートフォンでQRリンクを開き、カメラ・必要な場合はモーションを許可。
+3. 同じQRを平らに置いて映す。周囲の模様も映しながら少し端末を動かし、位置認識が安定したらQRに向けて静止する。
+4. 自動配置後は周りから眺める。画角の外へモデルが出た場合は、その場所にカメラを戻す。
+
+現在の配信先: https://yugemaru-ar.inaphy-ai.chatgpt.site （所有者限定）
+
+`index.html` が直接ARを開始。`ar.html` は旧URLからの転送。`model.html` はカメラ不要の3D確認。
+
+## 技術
+
+- `@8thwall/engine-binary` 1.0.0（配布物を変更せず同梱、SLAMあり）
+- three.js 0.160.1、GLTFLoader
+- `@8thwall/image-target-cli` 1.0.0 による同じQR画像のPLANARターゲット
+- `placement.mjs`: 不安定な検出の排除と一度限りの配置
+- 元GLB: https://www.yuge.ac.jp/yugemaru3d/yugemaru.glb
+- モデルはCORS制限を避けるため同一オリジン配信。モデルの更新は自動追従しない。
+- QRのURL/模様を変更した場合は画像ターゲットも再生成する。任意のQRを追跡する実装ではない。
+
+## 開発・検証
 
 `python3 -m http.server 8080 --directory dist`
 
-端末のカメラを使用するにはHTTPS（PC自身での開発はlocalhost）が必要です。`marker.html` を印刷または別画面に表示し、`ar.html` からカメラを許可してください。QRコードのリンク先は公開先URLです。QR自体は追跡用マーカーではありません。
+スマートフォンではHTTPSが必要。`node --test tests/placement.test.mjs` で初期配置条件、QR消失・再検出時の不変性、置き直しを確認する。
 
-## 構成
+iOSはモーション許可にユーザージェスチャーが必要な場合があるため、その場合だけ許可ボタンを表示。Androidでは通常はカメラ許可から開始する。SLAMは照明・周囲の模様・端末性能に依存し、ドリフトや追跡喪失は起こりうる。追跡喪失時は案内を表示する。リロードをまたぐ位置保存は行わない。
 
-- A-Frame 1.6.0 / AR.js 3.4.7（同梱）
-- GLB: https://www.yuge.ac.jp/yugemaru3d/yugemaru.glb （2026-10-15取得、3,288,264 bytes）
-- 元配信のCORSヘッダーがないためモデルを同一オリジンで配信。更新時はGLBを再取得してください。
-- 標準Hiroマーカー。任意画像の追跡には別途ターゲット生成・実装変更が必要です。
-- カメラ映像をアプリからアップロードする処理はありません。
+実機での6DoF精度・QR認識成功率は未検証。一般公開前にiPhone SafariとAndroid Chromeで、QRを隠す・端末を横に移動・回り込む・画面回転・バックグラウンド復帰を確認すること。
 
-## 検証の範囲
+## 出典・ライセンス
 
-デスクトップ表示・GLB構造・静的コードを確認。iOS Safari / Android Chromeでの実機カメラ追跡は別途確認が必要です。
-
-## 出典
-
-モデルの権利は提供元に帰属します。AR.js: https://github.com/AR-js-org/AR.js (MIT)、A-Frame: https://github.com/aframevr/aframe (MIT)。配布前にモデルの利用条件をご確認ください。
+モデルの権利は提供元に帰属する。8th Wall配布バイナリはMITではなくXR Engine License Agreementに従う。Copyright © 2026 Niantic Spatial, Inc. All rights reserved. 契約本文・保証免責: `dist/vendor/xr/LICENSE`。three.jsはMIT（`dist/vendor/three/LICENSE`）。カメラ不要の3D確認にはA-Frame 1.6.0（MIT）を使用。

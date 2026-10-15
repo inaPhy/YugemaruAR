@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/yugemaru-qr_luminance.png",
+  "metadata": null,
+  "name": "yugemaru-qr",
+  "type": "PLANAR",
+  "properties": {
+    "top": 0,
+    "left": 0,
+    "width": 960,
+    "height": 960,
+    "originalWidth": 960,
+    "originalHeight": 960,
+    "isRotated": false
+  },
+  "resources": {
+    "originalImage": "yugemaru-qr_original.png",
+    "croppedImage": "yugemaru-qr_cropped.png",
+    "thumbnailImage": "yugemaru-qr_thumbnail.png",
+    "luminanceImage": "yugemaru-qr_luminance.png"
+  },
+  "created": 1792047407502,
+  "updated": 1792047407502
+}
