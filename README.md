@@ -1,40 +1,24 @@
 # YugemaruAR
 
-同じQRコードをWebARへの入口と配置の画像ターゲットとして使用する。QRが見えている間は有効な位置・回転を毎回反映する。見失ったときだけ最後の世界座標を保持し、再検出したら新しいQR位置を基準に再配置する。QR認識時のカメラの背後約2mに、QRと同じ高さで配置し、QR消失時はその位置を保持する。ピンチの倍率とスワイプの回転は再検出後も維持。「置き直す」はモデルの親変換・操作量・配置・ジェスチャー履歴を直接初期化し、XrController.recenter()でカメラ基準位置を戻す。次のエンジンフレーム完了までQRイベントを無視し、その後の検出で配置する。ページやモデルは再読み込みしない。recenterはモーション履歴やSLAM地図の完全消去を保証するAPIではない。
+QRコードを入口と画像マーカーとして使用する、カメラのみのブラウザAR。QRの中央へモデルの底面中央を置き、QRの位置・回転へ追従する。QRを見失うとモデルを非表示にし、再検出すると再表示する。空間固定・モーション補正・モーション許可は使用しない。
 
-初期の向きは横向き（90度回転）。初期モデルの水平な長辺（船の全長）を2mに合わせ、縦横比を維持する。8th Wallの `scale: absolute` でメートル単位の座標を使用。マーカーのscaleはモデル倍率へ掛けない。横幅は端末による実寸推定に依存するため約2mであり、実機での測量精度は未確認。
+初期の船の全長はQR幅の約2倍。ピンチで拡大縮小、左右スワイプで回転。「置き直す」は操作量と配置を直接初期化し、次のQR検出で配置する。ページ再読み込みやエンジンのrecenterは行わない。
 
 ## 利用
 
-1. `marker.html` のQRを印刷（白い余白を保持、推奨約9cm角）。
-2. スマートフォンでQRリンクを開き、カメラ・必要な場合はモーションを許可。
-3. 同じQRを平らに置いて映す。周囲の模様も映しながら少し端末を動かし、周囲の実寸が推定されるまでゆっくり動かす。
-4. 自動配置後はピンチで拡大縮小、左右スワイプで回転できる。周りから眺める。画角の外へモデルが出た場合は、その場所にカメラを戻す。
+1. marker.html のQRを白い余白ごと印刷。
+2. スマートフォンでリンクを開き、カメラを許可。
+3. 平らに置いたQR全体をカメラに映す。
 
-現在の配信先: https://yugemaru-ar.inaphy-ai.chatgpt.site （所有者限定）
+配信先: https://yugemaru-ar.inaphy-ai.chatgpt.site （所有者限定）
 
-`index.html` が直接ARを開始。`ar.html` は旧URLからの転送。`model.html` はカメラ不要の3D確認。ARと共通のピンチ拡大縮小・左右スワイプ回転に対応し、パソコンではドラッグ・ホイールでも操作できる。
+## 技術・検証
 
-## 技術
+8th Wall engine-binary 1.0.0とthree.js 0.160.1を使用。XrControllerは起動前にdisableWorldTracking:true、scale:responsiveへ設定。メートル単位の推定は使わず、画像ターゲットのscaleとscaledWidthをモデルへ反映する。QRがない状態での空間固定は行わない。
 
-- `@8thwall/engine-binary` 1.0.0（配布物を変更せず同梱、SLAMあり）
-- three.js 0.160.1、GLTFLoader
-- `@8thwall/image-target-cli` 1.0.0 による同じQR画像のPLANARターゲット
-- `placement.mjs`: QR追従・消失時の位置保持・再検出時の再配置
-- 元GLB: https://www.yuge.ac.jp/yugemaru3d/yugemaru.glb
-- モデルはCORS制限を避けるため同一オリジン配信。モデルの更新は自動追従しない。
-- QRのURL/模様を変更した場合は画像ターゲットも再生成する。任意のQRを追跡する実装ではない。
+許可確認用カメラは取得直後に停止。エラー・離脱でエンジンを停止、非表示で一時停止。model.htmlはカメラ不要の3Dビューア。
 
-## 開発・検証
+node --test tests/*.test.mjs で検証。実機でのQR追跡精度は別途確認が必要。
 
-`python3 -m http.server 8080 --directory dist`
-
-スマートフォンではHTTPSが必要。`node --test tests/*.test.mjs` でQR追従・消失時の保持・再配置、初期横幅2m、タッチ操作、カメラ許可の順序を確認する。
-
-ページ読み込み直後にcamera-start.jsがカメラ許可を要求し、その後ARエンジンを読み込む。初期カメラストリームはXR起動前・エラー時・離脱時に解放する。iOSは未許可のモーション許可にユーザージェスチャーが必要なため、その場合だけカメラ許可の後に許可ボタンを表示。許可済みの場合は自動で続行する。SLAMは照明・周囲の模様・端末性能に依存し、ドリフトや追跡喪失は起こりうる。追跡喪失時は案内を表示する。リロードをまたぐ位置保存は行わない。
-
-実機での6DoF精度・QR認識成功率は未検証。一般公開前にiPhone SafariとAndroid Chromeで、QRを隠す・端末を横に移動・回り込む・画面回転・バックグラウンド復帰を確認すること。
-
-## 出典・ライセンス
-
-モデルの権利は提供元に帰属する。8th Wall配布バイナリはMITではなくXR Engine License Agreementに従う。Copyright © 2026 Niantic Spatial, Inc. All rights reserved. 契約本文・保証免責: `dist/vendor/xr/LICENSE`。three.jsはMIT（`dist/vendor/three/LICENSE`）。カメラ不要の3D確認もthree.jsを使用。
+モデル: https://www.yuge.ac.jp/yugemaru3d/yugemaru.glb
+モデルの権利は提供元に帰属。XR Engine License Agreementはdist/vendor/xr/LICENSE、three.jsはdist/vendor/three/LICENSEを参照。

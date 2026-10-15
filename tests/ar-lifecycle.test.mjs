@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import * as THREE from '../dist/vendor/three/three.module.js';
 import {Placement} from '../dist/placement.mjs';
-import {DEFAULT_MODEL_YAW,behindCamera} from '../dist/model-pose.mjs';
+import {DEFAULT_MODEL_YAW} from '../dist/model-pose.mjs';
 const source=readFileSync(new URL('../dist/ar.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/start\(\);\s*$/,'');
 function setup(){
  const handlers={},nodes=new Map(),counts={stop:0,pause:0,resume:0};
@@ -12,7 +12,7 @@ function setup(){
  const document={hidden:false,getElementById:get,querySelectorAll:()=>[],addEventListener:(n,f)=>handlers[n]=f};
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const engine={stop(){counts.stop++;},pause(){counts.pause++;},resume(){counts.resume++;},Threejs:{xrScene:()=>({scene,camera,renderer:{}})},XrController:{updateCameraProjectionMatrix(){}}};
- const context=vm.createContext({THREE,Placement,DEFAULT_MODEL_YAW,behindCamera,window:{addEventListener:(n,f)=>handlers[n]=f,releaseInitialCamera(){}},document,bindModelGestures:()=>()=>{},engine,console});
+ const context=vm.createContext({THREE,Placement,DEFAULT_MODEL_YAW,window:{addEventListener:(n,f)=>handlers[n]=f,releaseInitialCamera(){}},document,bindModelGestures:()=>()=>{},engine,console});
  vm.runInContext(source+'\nxr=engine;',context);
  return {context,document,handlers,counts,scene};
 }
