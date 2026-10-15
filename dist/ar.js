@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {bindModelGestures} from './gestures.mjs';
 import {fitModelWidth} from './model-size.mjs';
-import {DEFAULT_MODEL_YAW,beyondMarker} from './model-pose.mjs';
+import {DEFAULT_MODEL_YAW,behindCamera} from './model-pose.mjs';
 import {Placement} from './placement.mjs';
 window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
-let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null;
+let xr, anchor, visual, modelReady=false, normal=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null, placementOffset=null;
 function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   if(error)return;
@@ -19,7 +19,7 @@ function update(){
   if(error || resetting)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose){
-    if(placement.tracking)message('QR TRACKING','弓削丸が現れました',normal?'ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
+    if(placement.tracking)message('QR TRACKING','振り返ってみて！',normal?'ピンチで拡大縮小、スワイプで回転できます。':'実寸を推定中です。周囲も映しながら端末をゆっくり動かしてください。');
     else message(normal?'POSITION HELD':'TRACKING',normal?'最後の位置に表示しています':'周囲をゆっくり映してください',normal?'ピンチで拡大縮小、スワイプで回転できます。':'空間の位置を再確認しています。QRを映すと配置を更新できます。');
     return;
   }
@@ -33,7 +33,7 @@ $('larger').onclick=()=>{size=Math.min(3,size+.15);controls();};
 $('rotate').onclick=()=>{angle+=Math.PI/4;controls();};
 function resetPlacement(){
   if(!modelReady || resetting)return;
-  resetting=true;resetGestures();placement.reset();normal=false;
+  resetting=true;resetGestures();placement.reset();placementOffset=null;normal=false;
   size=1;angle=DEFAULT_MODEL_YAW;
   anchor.visible=false;anchor.position.set(0,0,0);anchor.quaternion.identity();anchor.scale.setScalar(1);
   visual.position.set(0,0,0);visual.rotation.set(0,DEFAULT_MODEL_YAW,0);visual.scale.setScalar(1);
@@ -47,10 +47,15 @@ function resetPlacement(){
 $('reset').onclick=resetPlacement;
 function receive({detail}){
   if(!modelReady || error || resetting)return;
+  const newlyFound=!placement.tracking;
   const pose=placement.observe(detail);
   if(!pose)return;
   const {camera}=xr.Threejs.xrScene();
-  anchor.position.copy(beyondMarker(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3())));anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
+  if(newlyFound || !placementOffset){
+    const target=behindCamera(pose.position,camera.getWorldPosition(new THREE.Vector3()),camera.getWorldDirection(new THREE.Vector3()));
+    placementOffset=new THREE.Vector3(target.x-pose.position.x,0,target.z-pose.position.z);
+  }
+  anchor.position.copy(pose.position).add(placementOffset);anchor.quaternion.copy(pose.rotation);anchor.scale.setScalar(1);
   anchor.visible=true;document.querySelectorAll('#actions button').forEach(b=>b.disabled=false);update();
 }
 function loseMarker({detail}){
@@ -119,14 +124,16 @@ async function start(){
     const run=()=>{if(departed || error || runRequested)return;if(document.hidden){deferredRun=run;return;}deferredRun=null;runRequested=true;window.releaseInitialCamera?.();message('PERMISSION','カメラの使用を許可してください','QRコード全体を映すと、自動で配置します。');try{xr.run({canvas:$('camerafeed'),allowedDevices:xr.XrConfig.device().MOBILE,cameraConfig:{direction:xr.XrConfig.camera().BACK}});}catch(e){fail('この端末でARを開始できませんでした','iPhone・AndroidのブラウザからQRコードを開いてください。');}};
     // Previously granted motion permission can continue automatically. A first
     // grant may require a real user gesture; it must never gate camera permission.
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    const sensors=[globalThis.DeviceOrientationEvent,globalThis.DeviceMotionEvent].filter(sensor=>typeof sensor?.requestPermission==='function');
+    const requestMotion=()=>Promise.all(sensors.map(sensor=>sensor.requestPermission())).then(results=>results.every(result=>result==='granted'));
+    if(sensors.length){
       let motionGranted=false;
-      try{motionGranted=(await DeviceOrientationEvent.requestPermission())==='granted';}catch{}
+      try{motionGranted=await requestMotion();}catch{}
       if(motionGranted){run();return;}
-      message('PERMISSION','端末の動きを許可してください','カメラは許可済みです。空間に固定するため、端末の動きも許可してください。');
+      message('PERMISSION','あと1タップでARを開始','下のボタンを押し、モーションの使用を許可してください。');
       $('permission').hidden=false;
       $('permission').onclick=async()=>{
-        try{const result=await DeviceOrientationEvent.requestPermission();if(result!=='granted')throw new Error('denied');$('permission').hidden=true;run();}catch(e){fail('端末の動きが許可されませんでした','Safariのサイト設定を確認し、再読み込みしてください。');}
+        try{const result=await requestMotion();if(!result)throw new Error('denied');$('permission').hidden=true;run();}catch(e){fail('端末の動きが許可されませんでした','Safariのサイト設定を確認し、再読み込みしてください。');}
       };
     }else run();
   }catch(e){console.error('AR startup failed',e);fail('ARの準備に失敗しました','通信状態を確認し、再読み込みしてください。');}
