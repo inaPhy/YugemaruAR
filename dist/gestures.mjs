@@ -4,14 +4,17 @@ export class ModelGesture {
   update(points, scale, angle, width){
     const previous=this.previous;
     this.previous=points.map(p=>({...p}));
-    if(points.length!==previous.length || !points.every((p,i)=>p.id===previous[i]?.id))return {scale,angle};
+    let panX=0,panY=0;
+    if(points.length!==previous.length || !points.every((p,i)=>p.id===previous[i]?.id))return {scale,angle,panX,panY};
     if(points.length===1) angle+=(points[0].x-previous[0].x)/Math.max(width,1)*Math.PI*2;
     if(points.length===2){
       const distance=ps=>Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);
       const before=distance(previous),after=distance(points);
       if(before>8 && after>8)scale=Math.min(3,Math.max(.3,scale*after/before));
+      panX=(points[0].x+points[1].x-previous[0].x-previous[1].x)/2;
+      panY=(points[0].y+points[1].y-previous[0].y-previous[1].y)/2;
     }
-    return {scale,angle};
+    return {scale,angle,panX,panY};
   }
 }
 export function bindModelGestures(canvas,{enabled,read,write}){

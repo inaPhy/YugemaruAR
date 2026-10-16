@@ -11,6 +11,7 @@ window.THREE=THREE;
 const $=id=>document.getElementById(id);
 const placement=new Placement();
 const growth=new ModelGrowth();
+const panWorld=new THREE.Vector3(),panRight=new THREE.Vector3(),panUp=new THREE.Vector3();
 let modelAnimation;
 let markerWidth=1, candidateWidth=1, hasPlaced=false, returnedToQr=false, printing=false;
 const projectedQr=new THREE.Vector3(), cameraQr=new THREE.Vector3();
@@ -28,19 +29,29 @@ function update(){
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose && trackingNormal===false){message('TRACKING','周囲をゆっくり映してください','位置を確認しています。QRを映すと配置し直せます。');return;}
   if(returnedToQr && placement.tracking){message('QR TRACKING','QRの位置を追跡しています','初期状態に戻す時は、QR上の「置き直す」をタップしてください。');return;}
-  if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小、スワイプで回転できます。');return;}
+  if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小、1本指で回転、2本指で移動できます。');return;}
   if(placement.pose){message('POSITION HELD','その場所に弓削丸を表示しています','周りから眺めてみましょう。置き直す時はQRをもう一度映してください。');return;}
   message('FIND YOUR QR','同じQRコードを映してください','QRコード全体をカメラに映してください。');
 }
 $('retry').onclick=()=>location.reload();
-const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;controls();}});
+const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;panFromScreen(next.panX,next.panY);controls();}});
+function panFromScreen(dx=0,dy=0){
+  if((!dx&&!dy)||!xr||!anchor)return;
+  const {camera}=xr.Threejs.xrScene();
+  const canvas=$('camerafeed');
+  const modelWidth=Math.max(anchor.scale.x*size*2,.01);
+  const unitsPerPixel=modelWidth/Math.max(canvas.clientWidth,1);
+  panRight.set(1,0,0).applyQuaternion(camera.quaternion).multiplyScalar(dx*unitsPerPixel);
+  panUp.set(0,1,0).applyQuaternion(camera.quaternion).multiplyScalar(-dy*unitsPerPixel);
+  panWorld.add(panRight).add(panUp);trackQrPose();
+}
 function controls(){visual.scale.setScalar(size);visual.rotation.y=angle;}
 function trackQrPose(){
   if(!anchor || !placement.pose)return;
-  anchor.position.copy(placement.pose.position);anchor.quaternion.copy(placement.pose.rotation);
+  anchor.position.copy(placement.pose.position).add(panWorld);anchor.quaternion.copy(placement.pose.rotation);
 }
 function placeAtQr(){
-  resetGestures();growth.reset();size=1;angle=DEFAULT_MODEL_YAW;
+  resetGestures();growth.reset();size=1;angle=DEFAULT_MODEL_YAW;panWorld.set(0,0,0);
   visual.position.set(0,0,0);visual.rotation.set(0,angle,0);visual.scale.setScalar(1);
   trackQrPose();
   markerWidth=candidateWidth;hasPlaced=true;returnedToQr=false;

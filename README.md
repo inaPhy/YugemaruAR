@@ -24,3 +24,5 @@ node --test tests/*.test.mjs で検証。実機でのQR追跡精度は別途確�
 モデルの権利は提供元に帰属。XR Engine License Agreementはdist/vendor/xr/LICENSE、three.jsはdist/vendor/three/LICENSEを参照。
 
 GLBに含まれる先頭のアニメーションクリップをAnimationMixerでループ再生。既存のARフレーム内で更新し、非表示・印刷中は一時停止、離脱で解放する。モデルの正規化・拡大・ユーザー操作はアニメーション対象の外側のGroupで適用する。
+
+モデルはピンチで拡大縮小、1本指のスワイプで回転、2本指のスワイプで画面から見た上下左右へ移動できる。2本指移動はカメラの右・上方向を実空間へ変換して保持するため、モデル自身やQRの向きには依存しない。
