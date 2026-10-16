@@ -10,7 +10,7 @@ QRコードを入口と画像マーカーとして使用する、カメラとモ
 2. スマートフォンでリンクを開き、カメラと、必要な場合はモーションを許可。
 3. 平らに置いたQR全体をカメラに映す。
 
-配信先: https://yugemaru-ar.inaphy-ai.chatgpt.site （所有者限定）
+公開先: https://inaphy.github.io/YugemaruAR/
 
 ## 技術・検証
 
