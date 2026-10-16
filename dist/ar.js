@@ -28,10 +28,10 @@ function update(){
   if(error || resetting)return;
   if(!modelReady){message('LOADING','弓削丸を読み込んでいます','初回は読み込みに少し時間がかかります。');return;}
   if(placement.pose && trackingNormal===false){message('TRACKING','周囲をゆっくり映してください','位置を確認しています。QRを映すと配置し直せます。');return;}
-  if(returnedToQr && placement.tracking){message('QR TRACKING','QRの位置を追跡しています','初期状態に戻す時は、QR上の「置き直す」をタップしてください。');return;}
-  if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小、1本指で回転、2本指で移動できます。');return;}
-  if(placement.pose){message('POSITION HELD','その場所に弓削丸を表示しています','周りから眺めてみましょう。置き直す時はQRをもう一度映してください。');return;}
-  message('FIND YOUR QR','同じQRコードを映してください','QRコード全体をカメラに映してください。');
+  if(returnedToQr && placement.tracking){message('QR TRACKING','ピンチで拡大縮小　1本指で回転　2本指で移動','初期状態に戻すには QRの「置き直す」をタップ');return;}
+  if(placement.tracking){message('QR TRACKING','弓削丸を表示しています','ピンチで拡大縮小　1本指で回転　2本指で移動');return;}
+  if(placement.pose){message('POSITION HELD','ピンチで拡大縮小　1本指で回転　2本指で移動','もとの位置に戻すにはQRを写してください');return;}
+  message('FIND YOUR QR','QRコードを探しています。','QRコード全体をカメラで写してください。');
 }
 $('retry').onclick=()=>location.reload();
 const resetGestures=bindModelGestures($('camerafeed'),{enabled:()=>!!placement.pose && modelReady && !error,read:()=>({scale:size,angle}),write:next=>{size=next.scale;angle=next.angle;panFromScreen(next.panX,next.panY);controls();}});
