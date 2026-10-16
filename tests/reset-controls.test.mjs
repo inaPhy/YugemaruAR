@@ -11,7 +11,7 @@ test('world tracking enabled; reset never recenters camera',()=>{
  assert.match(full,/disableWorldTracking:false/);assert.match(full,/scale:'responsive'/);
  assert.match(full,/await requestMotionPermission\(\)/);assert.doesNotMatch(full,/\.recenter\(/);
 });
-test('reacquired QR offers reset; model moves and growth restarts only after tap',()=>{
+test('visible or reacquired QR tracks continuously; reset only restores initial appearance and growth',()=>{
  const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{hidden:true,style:{},textContent:''});return nodes.get(id);};let cleared=0;
  const context=vm.createContext({window:{},innerWidth:390,innerHeight:844,document:{getElementById:get},THREE,Placement,ModelGrowth,performance:{now:()=>0},DEFAULT_MODEL_YAW,bindModelGestures:()=>()=>cleared++});
  vm.runInContext(full.replace(/^import .*;\n/gm,'').split('function loadEngine()')[0]+`
@@ -22,9 +22,9 @@ xr={Threejs:{xrScene:()=>({camera:new THREE.PerspectiveCamera(60,390/844,.01,100
  vm.runInContext('performance.now=()=>5000;pipeline(null).onUpdate({});loseMarker(event);',context);
  assert.equal(vm.runInContext('anchor.scale.x',context),6);assert.equal(get('reset').hidden,true);
  vm.runInContext('event.detail.position.z=-7;receive(event);',context);
- assert.equal(vm.runInContext('anchor.position.z',context),-3);assert.equal(get('reset').hidden,false);assert.equal(get('reset').style.left,'195px');
+ assert.equal(vm.runInContext('anchor.position.z',context),-7);assert.equal(vm.runInContext('anchor.scale.x',context),6);assert.equal(get('reset').hidden,false);assert.equal(get('reset').style.left,'195px');
  get('reset').onclick();
  assert.equal(vm.runInContext('anchor.position.z',context),-7);assert.equal(vm.runInContext('anchor.scale.x',context),.2);assert.equal(get('reset').hidden,true);assert.equal(cleared,2);
- vm.runInContext('receive(event);',context);assert.equal(get('reset').hidden,true);
- vm.runInContext('loseMarker(event);event.detail.position.z=3;receive(event);',context);assert.equal(get('reset').hidden,true);
+ vm.runInContext('event.detail.position.z=-8;receive(event);',context);assert.equal(vm.runInContext('anchor.position.z',context),-8);assert.equal(get('reset').hidden,true);
+ vm.runInContext('loseMarker(event);event.detail.position.z=3;receive(event);',context);assert.equal(vm.runInContext('anchor.position.z',context),3);assert.equal(get('reset').hidden,true);
 });
