@@ -16,7 +16,8 @@ let modelAnimation;
 let markerWidth=1, candidateWidth=1, hasPlaced=false, returnedToQr=false, printing=false;
 const projectedQr=new THREE.Vector3(), cameraQr=new THREE.Vector3();
 let xr, anchor, visual, modelReady=false, error=false, size=1, angle=DEFAULT_MODEL_YAW, running=false, resetting=false, departed=false, runRequested=false, deferredRun=null, trackingNormal=null;
-function message(phase,title,hint){for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
+function message(phase,title,hint){$('loading').hidden=phase!=='LOADING';for(const [id,text] of [['phase',phase],['status',title],['hint',hint]]){if($(id).textContent!==text)$(id).textContent=text;}}
+function loadingText(text){if($('loading-text').textContent!==text)$('loading-text').textContent=text;}
 function fail(title,hint='SafariまたはChromeで開き直し、カメラの権限を確認してください。'){
   if(error)return;
   modelAnimation?.pause();
@@ -124,7 +125,8 @@ function loadEngine(){return new Promise((resolve,reject)=>{
   const script=document.createElement('script');script.src='vendor/xr/xr.js';script.async=true;script.dataset.preloadChunks='slam';
   script.onerror=()=>{clearTimeout(timeout);reject(new Error('engine-download'));};document.head.appendChild(script);
 });}
-function loadModel(){return new GLTFLoader().loadAsync('assets/yugemaru.glb').then(gltf=>{
+function loadModel(){return new GLTFLoader().loadAsync('assets/yugemaru.glb',e=>{if(e.lengthComputable && e.total>0)loadingText(`弓削丸を読み込み中 ${Math.min(99,Math.floor(e.loaded/e.total*100))}%`);}).then(gltf=>{
+  loadingText('ARを準備しています');
   // Keep normalization outside the animated root so authored transforms stay intact.
   const model=new THREE.Group();model.add(gltf.scene);fitModelWidth(model);
   if(!departed && !error)modelAnimation=new ModelAnimation(gltf.scene,gltf.animations);

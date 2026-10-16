@@ -29,3 +29,10 @@ header{flex-shrink:0}
   #print-sheet ol{display:inline-block;margin:0;padding:0;list-style-position:inside;text-align:left;font-size:14pt;line-height:1.9;font-weight:600}
   #print-sheet li{white-space:nowrap}
 }
+
+/* Keep the screen visibly alive while the AR engine and model download. */
+#loading{position:fixed;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:14px;pointer-events:none;font-size:13px;font-weight:700;text-shadow:0 1px 8px #0008}
+.spinner{width:48px;height:48px;border-radius:50%;border:5px solid #ffffff40;border-top-color:#d9ec9c;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
+@media print{#loading{display:none!important}}

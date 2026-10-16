@@ -33,3 +33,10 @@ test('late startup after leaving page stops instead of creating scene',()=>{
  const s=setup();s.handlers.pagehide();vm.runInContext('pipeline(new THREE.Group()).onStart();',s.context);
  assert.equal(s.scene.children.length,0);assert.equal(s.counts.stop,2);
 });
+test('loading spinner shows only while loading and hides on ready or error',()=>{
+ const s=setup(),spinner=s.document.getElementById('loading');
+ vm.runInContext('message("LOADING","a","b");',s.context);assert.equal(spinner.hidden,false);
+ vm.runInContext('pipeline(new THREE.Group()).onStart();',s.context);assert.equal(spinner.hidden,true);
+ const f=setup(),failSpinner=f.document.getElementById('loading');
+ vm.runInContext('message("LOADING","a","b");fail("failed");',f.context);assert.equal(failSpinner.hidden,true);
+});
